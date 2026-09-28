@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>線上密室逃脫 - 完整解謎遊戲 (記憶圖檔版)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+        
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .game-viewport {
+            aspect-ratio: 16 / 9;
+            width: 100%;
+            max-width: 960px;
+            position: relative;
+            overflow: hidden;
+            border-radius: 12px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+            background-color: #1e293b;
+        }
+
+        .panorama-strip {
+            display: flex;
+            height: 100%;
+            width: 400%;
+            transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        .scene-view {
+            width: 25%;
+            height: 100%;
+            position: relative;
+            flex-shrink: 0;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+
+        .nav-btn {
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #ffffff;
+            transition: all 0.2s ease;
+        }
+
+        .nav-btn:hover {
+            background: rgba(30, 41, 59, 0.9);
+            border-color: rgba(255, 255, 255, 0.4);
+            transform: scale(1.08);
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
+        }
+
+        .hotspot {
+            position: absolute;
+            cursor: pointer;
+            border: 2px dashed rgba(255, 255, 255, 0.4);
+            background: rgba(255, 255, 255, 0.08);
+            transition: all 0.2s ease;
+        }
+
+        .hotspot:hover {
+            border-color: rgba(59, 130, 246, 0.9);
+            background: rgba(59, 130, 246, 0.25);
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.6);
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { opacity: 0.8; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.04); }
+        }
+
+        .pulse-active {
+            animation: pulse-glow 2s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-between p-2 sm:p-4 bg-slate-950 text-slate-100">
+
+    <header class="w-full max-w-5xl flex flex-wrap items-center justify-between py-3 px-4 mb-2 bg-slate-900/80 rounded-xl border border-slate-800 backdrop-blur">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-indigo-600 flex items-center justify-center font-black text-xl shadow-lg shadow-indigo-500/30">
+                <i class="fa-solid fa-door-closed"></i>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold tracking-wide text-white">密室逃脫：圖檔永久儲存版</h1>
+                <p class="text-xs text-slate-400">上傳的圖檔會自動儲存於瀏覽器記憶體中</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3 mt-2 sm:mt-0">
+            <div class="flex items-center bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800 gap-2">
+                <span class="text-xs text-slate-400 font-medium">當前面向：</span>
+                <span id="compass-badge" class="px-2.5 py-0.5 rounded text-sm font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    北方 (North)
+                </span>
+            </div>
+
+            <button onclick="toggleImageSourceModal()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-xs text-white font-medium rounded-lg border border-indigo-500 transition flex items-center gap-1.5 shadow-lg shadow-indigo-600/20">
+                <i class="fa-solid fa-folder-open"></i>
+                <span>圖檔與儲存設定</span>
+            </button>
+        </div>
+    </header>
+
+    <main class="w-full max-w-5xl flex flex-col items-center justify-center my-auto">
+        
+        <div id="game-viewport-container" class="game-viewport border-2 border-slate-800 shadow-2xl relative">
+            <div id="drop-overlay" class="absolute inset-0 bg-indigo-950/90 backdrop-blur-md z-40 flex flex-col items-center justify-center border-4 border-dashed border-indigo-400 rounded-xl opacity-0 pointer-events-none transition-opacity duration-300">
+                <i class="fa-solid fa-cloud-arrow-up text-5xl text-indigo-300 mb-3 animate-bounce"></i>
+                <p class="text-lg font-bold text-white">放開滑鼠以載入並快取圖片檔案</p>
+                <p class="text-xs text-indigo-200 mt-1">圖片將自動儲存於此瀏覽器中</p>
+            </div>
+
+            <div id="panorama-strip" class="panorama-strip">
+                <!-- 北方場景 -->
+                <div id="scene-north" class="scene-view">
+                    <!-- 窗戶熱點 -->
+                    <div class="hotspot" style="left: 13.5%; top: 18.0%; width: 33.5%; height: 56.5%; border-radius: 8px;" onclick="openInspectionModal('window')" title="點擊檢視窗戶"></div>
+                    <!-- 北方大門密碼鎖熱點 -->
+                    <div class="hotspot pulse-active" style="left: 91.5%; top: 52.0%; width: 6.0%; height: 11.0%; border-radius: 6px;" onclick="openDoorLockModal()" title="點擊藍色密碼鎖"></div>
+                </div>
+
+                <!-- 東方場景 -->
+                <div id="scene-east" class="scene-view">
+                    <!-- 東方黑色書包熱點 -->
+                    <div class="hotspot" style="left: 1.0%; top: 78.0%; width: 9.5%; height: 20.0%; border-radius: 6px;" onclick="openPuzzleModal('backpack')" title="點擊黑色書包"></div>
+                    <!-- 東方橘色箱子熱點 -->
+                    <div class="hotspot" style="left: 15.5%; top: 15.0%; width: 7.0%; height: 16.0%; border-radius: 6px;" onclick="openPuzzleModal('orangeBox')" title="點擊橘色箱子"></div>
+                </div>
+
+                <!-- 南方場景 -->
+                <div id="scene-south" class="scene-view">
+                    <!-- 畫框熱點 -->
+                    <div class="hotspot" style="left: 9.5%; top: 10.0%; width: 17.5%; height: 38.0%; border-radius: 6px;" onclick="openPuzzleModal('frame')" title="點擊檢視畫框"></div>
+                    <!-- 日曆熱點 -->
+                    <div class="hotspot" style="left: 74.5%; top: 10.0%; width: 15.0%; height: 41.0%; border-radius: 6px;" onclick="openInspectionModal('calendar')" title="點擊檢視日曆"></div>
+                    <!-- 書本熱點 -->
+                    <div class="hotspot" style="left: 43.0%; top: 56.0%; width: 15.5%; height: 32.0%; border-radius: 6px;" onclick="openInspectionModal('book')" title="點擊檢視書本"></div>
+                </div>
+
+                <!-- 西方場景 -->
+                <div id="scene-west" class="scene-view">
+                    <!-- 牆上塗鴉熱點 -->
+                    <div class="hotspot" style="left: 13.0%; top: 68.0%; width: 23.5%; height: 22.0%; border-radius: 8px;" onclick="openInspectionModal('doodle')" title="點擊檢視牆上塗鴉"></div>
+                    <!-- 西方保險箱熱點 -->
+                    <div class="hotspot" style="left: 72.5%; top: 75.0%; width: 15.0%; height: 21.0%; border-radius: 6px;" onclick="openPuzzleModal('safe')" title="點擊保險箱"></div>
+                </div>
+            </div>
+
+            <button onclick="turnLeft()" aria-label="向左轉" class="nav-btn absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center text-2xl z-20 shadow-lg">
+                <i class="fa-solid fa-chevron-left"></i>
+            </button>
+
+            <button onclick="turnRight()" aria-label="向右轉" class="nav-btn absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center text-2xl z-20 shadow-lg">
+                <i class="fa-solid fa-chevron-right"></i>
+            </button>
+
+            <button onclick="turnAround()" aria-label="向後轉" class="nav-btn absolute bottom-4 left-1/2 -translate-x-1/2 px-5 py-2.5 rounded-full flex items-center gap-2 text-sm sm:text-base font-semibold z-20 shadow-lg">
+                <i class="fa-solid fa-rotate-left"></i>
+                <span>向後轉</span>
+            </button>
+
+            <div class="absolute top-4 left-4 bg-slate-900/80 backdrop-blur border border-slate-700/60 rounded-xl p-2.5 z-20 flex items-center gap-3">
+                <div class="relative w-10 h-10 rounded-full border border-slate-600 flex items-center justify-center bg-slate-950">
+                    <span class="absolute top-0.5 text-[10px] font-bold text-red-400">N</span>
+                    <span class="absolute bottom-0.5 text-[10px] font-bold text-slate-400">S</span>
+                    <span class="absolute left-1 text-[10px] font-bold text-slate-400">W</span>
+                    <span class="absolute right-1 text-[10px] font-bold text-slate-400">E</span>
+                    <div id="compass-needle" class="w-1 h-6 bg-red-500 rounded-full transition-transform duration-500 origin-center" style="transform: rotate(0deg);"></div>
+                </div>
+                <div class="text-xs">
+                    <div class="text-slate-400">方位 View</div>
+                    <div id="radar-label" class="font-bold text-slate-100">北方 (0°)</div>
+                </div>
+            </div>
+
+            <div id="toast-msg" class="absolute top-4 right-4 bg-emerald-600 text-white text-xs font-bold px-3 py-2 rounded-lg shadow-xl z-30 transition-all duration-300 opacity-0 transform translate-y-[-10px] pointer-events-none flex items-center gap-2">
+                <i class="fa-solid fa-circle-check"></i>
+                <span id="toast-text">成功！</span>
+            </div>
+        </div>
+    </main>
+
+    <!-- 物件檢視彈窗 -->
+    <div id="inspection-modal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-xl p-6 shadow-2xl relative">
+            <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-800">
+                <h3 id="inspection-title" class="text-base font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-magnifying-glass text-indigo-400"></i>
+                    <span>物件特寫</span>
+                </h3>
+                <button onclick="closeInspectionModal()" class="text-slate-400 hover:text-white text-lg">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div id="inspection-container" class="w-full h-64 sm:h-72 bg-slate-950 rounded-xl border border-slate-800 mb-4 bg-contain bg-no-repeat bg-center flex items-center justify-center relative overflow-hidden shadow-inner">
+            </div>
+
+            <div class="flex justify-end pt-3 border-t border-slate-800">
+                <button onclick="closeInspectionModal()" class="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 rounded-xl transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    <span>返回</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 謎題/寶箱解鎖彈窗 -->
+    <div id="puzzle-modal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div id="draggable-puzzle-card" class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative overflow-hidden">
+            <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-800 cursor-move">
+                <h3 id="puzzle-modal-title" class="text-base font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-puzzle-piece text-indigo-400"></i>
+                    <span>密室解謎</span>
+                </h3>
+                <button onclick="closePuzzleModal()" class="text-slate-400 hover:text-white text-lg">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div id="puzzle-image-container" class="w-full h-48 bg-slate-950 rounded-xl border border-slate-800 mb-4 bg-contain bg-no-repeat bg-center flex items-center justify-center relative overflow-hidden shadow-inner">
+            </div>
+
+            <div class="mb-4">
+                <div class="text-xs text-slate-400 mb-1">目前密碼輸入：</div>
+                <div id="puzzle-combination-display" class="w-full bg-slate-950 border-2 border-indigo-500/40 rounded-xl py-3 text-center text-2xl font-black tracking-widest text-indigo-300 shadow-inner">
+                    ----
+                </div>
+                <div id="puzzle-error-msg" class="text-rose-400 text-xs text-center mt-1 h-4 font-bold"></div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2 mb-4">
+                <button onclick="pressPuzzleKey('1')" class="py-2.5 bg-slate-800 hover:bg-slate-700 active:scale-95 font-bold rounded-lg text-white text-base transition">1</button>
+                <button onclick="pressPuzzleKey('2')" class="py-2.5 bg-slate-800 hover:bg-slate-700 active:scale-95 font-bold rounded-lg text-white text-base transition">2</button>
+                <button onclick="pressPuzzleKey('3')" class="py-2.5 bg-slate-800 hover:bg-slate-700 active:scale-95 font-bold rounded-lg text-white text-base transition">3</button>
+                <button onclick="pressPuzzleKey('4')" class="py-2.5 bg-slate-800 hover:bg-slate-700 active:scale-95 font-bold rounded-lg text-white text-base transition">4</button>
+                <button onclick="pressPuzzleKey('5')" class="py-2.5 bg-slate-800 hover:bg-slate-700 active:scale-95 font-bold rounded-lg text-white text-base transition">5</button>
+                <button onclick="pressPuzzleKey('6')" class="py-2.5 bg-slate-800 hover:bg-slate-700 active:scale-95 font-bold rounded-lg text-white text-base transition">6</button>
+                <button onclick="pressPuzzleKey('7')" class="py-2.5 bg-slate-800 hover:bg-slate-700 active:scale-95 font-bold rounded-lg text-white text-base transition">7</button>
+                <button onclick="pressPuzzleKey('8')" class="py-2.5 bg-slate-800 hover:bg-slate-700 active:scale-95 font-bold rounded-lg text-white text-base transition">8</button>
+                <button onclick="pressPuzzleKey('9')" class="py-2.5 bg-slate-800 hover:bg-slate-700 active:scale-95 font-bold rounded-lg text-white text-base transition">9</button>
+                <button onclick="clearPuzzleInput()" class="py-2.5 bg-rose-950/60 hover:bg-rose-900 border border-rose-800 text-rose-300 font-bold rounded-lg text-xs transition">清除</button>
+                <button onclick="pressPuzzleKey('0')" class="py-2.5 bg-slate-800 hover:bg-slate-700 active:scale-95 font-bold rounded-lg text-white text-base transition">0</button>
+                <button onclick="submitPuzzleCode()" class="py-2.5 bg-emerald-600 hover:bg-emerald-500 font-bold rounded-lg text-white text-xs shadow-lg shadow-emerald-600/30 transition">確認</button>
+            </div>
+
+            <div class="flex justify-end pt-3 border-t border-slate-800">
+                <button onclick="closePuzzleModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 rounded-lg transition">
+                    返回遊戲
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 北方大門解鎖彈窗 -->
+    <div id="door-lock-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div id="draggable-lock-card" class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative overflow-hidden">
+            <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-800 cursor-move">
+                <h3 class="text-base font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-lock text-amber-400"></i>
+                    <span>北方大門密碼鎖 (解鎖逃脫)</span>
+                </h3>
+                <button onclick="closeDoorLockModal()" class="text-slate-400 hover:text-white text-lg">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div id="puzzle-door-container" class="w-full h-48 bg-slate-950 rounded-xl border border-slate-800 mb-4 bg-contain bg-no-repeat bg-center flex items-center justify-center relative overflow-hidden">
+                <div class="absolute bottom-2 bg-slate-950/80 px-3 py-1 rounded text-[11px] text-slate-300 border border-slate-800">
+                    提示：輸入正確的 4 位數密碼解開大門
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <div class="text-xs text-slate-400 mb-1">目前密碼輸入：</div>
+                <div id="combination-display" class="w-full bg-slate-950 border-2 border-amber-500/40 rounded-xl py-3 text-center text-2xl font-black tracking-widest text-amber-300 shadow-inner">
+                    ----
+                </div>
+                <div id="lock-error-msg" class="text-rose-400 text-xs text-center mt-1 h-4 font-bold"></div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2 mb-4">
+                <button onclick="pressLockKey('1')" class="py-3 bg-slate-800 hover:bg-slate-700 active:scale-95 font-bold rounded-lg text-white text-lg transition">1</button>
+                <button onclick="pressLockKey('2')" class="py-3 bg-slate-800 hover:bg-slate-700 active:scale-95 font-bold rounded-lg text-white text-lg transition">2</button>
+                <button onclick="pressLockKey('3')" class="py-3 bg-slate-800 hover:bg-slate-700 active:scale-95 font-bold rounded-lg text-white text-lg transition">3</button>
+                <button onclick="pressLockKey('4')" class="py-3 bg-slate-800 hover:bg-slate-700 active:scale-95 font-bold rounded-lg text-white text-lg transition">4</button>
+                <button onclick="pressLockKey('5')" class="py-3 bg-slate-800 hover:bg-slate-700 active:scale-95 font-bold rounded-lg text-white text-lg transition">5</button>
+                <button onclick="pressLockKey('6')" class="py-3 bg-slate-800 hover:bg-slate-700 active:scale-95 font-bold rounded-lg text-white text-lg transition">6</button>
+                <button onclick="pressLockKey('7')" class="py-3 bg-slate-800 hover:bg-slate-700 active:scale-95 font-bold rounded-lg text-white text-lg transition">7</button>
+                <button onclick="pressLockKey('8')" class="py-3 bg-slate-800 hover:bg-slate-700 active:scale-95 font-bold rounded-lg text-white text-lg transition">8</button>
+                <button onclick="pressLockKey('9')" class="py-3 bg-slate-800 hover:bg-slate-700 active:scale-95 font-bold rounded-lg text-white text-lg transition">9</button>
+                <button onclick="clearLockInput()" class="py-3 bg-rose-950/60 hover:bg-rose-900 border border-rose-800 text-rose-300 font-bold rounded-lg text-xs transition">清除 (CLR)</button>
+                <button onclick="pressLockKey('0')" class="py-3 bg-slate-800 hover:bg-slate-700 active:scale-95 font-bold rounded-lg text-white text-lg transition">0</button>
+                <button onclick="submitLockCode()" class="py-3 bg-emerald-600 hover:bg-emerald-500 font-bold rounded-lg text-white text-xs shadow-lg shadow-emerald-600/30 transition">確認 (OK)</button>
+            </div>
+
+            <div class="flex justify-end pt-3 border-t border-slate-800">
+                <button onclick="closeDoorLockModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 rounded-lg transition">
+                    返回遊戲
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 通關勝利彈窗 -->
+    <div id="victory-modal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-gradient-to-b from-slate-900 to-indigo-950 border-2 border-amber-500/50 rounded-2xl w-full max-w-md p-6 shadow-2xl text-center relative">
+            <div class="w-16 h-16 bg-amber-500/20 text-amber-400 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl border border-amber-500/40 animate-bounce">
+                <i class="fa-solid fa-trophy"></i>
+            </div>
+            <h2 class="text-2xl font-black text-white mb-1">🎉 ROOM COMPLETE!</h2>
+            <p class="text-sm text-amber-300 font-bold mb-3">恭喜您成功解開北方大門密碼！</p>
+            <p class="text-xs text-slate-300 mb-6 leading-relaxed">
+                大門已經順利開啟，您成功完成了本階段的密室逃脫挑戰！您可以繼續探索或重新遊玩。
+            </p>
+            <div class="flex justify-center gap-3">
+                <button onclick="closeVictoryModal()" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white rounded-xl shadow-lg shadow-indigo-600/30 transition">
+                    查看開啟的大門
+                </button>
+                <button onclick="resetGameRoom()" class="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 rounded-lg transition">
+                    重新遊玩
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 圖片來源設定彈窗 -->
+    <div id="image-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl relative">
+            <button onclick="toggleImageSourceModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-lg">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <h3 class="text-lg font-bold text-white mb-1 flex items-center gap-2">
+                <i class="fa-solid fa-images text-indigo-400"></i>
+                <span>圖檔與瀏覽器快取設定</span>
+            </h3>
+            <p class="text-xs text-slate-400 mb-4">上傳或拖入的圖片會自動儲存於此瀏覽器，不需重複上傳：</p>
+
+            <div class="mb-4 p-3 bg-slate-950/80 border border-indigo-500/30 rounded-xl space-y-2">
+                <div class="text-xs font-bold text-indigo-300 flex items-center gap-1">
+                    <i class="fa-solid fa-file-arrow-up"></i>
+                    <span>從電腦選擇多張圖檔 (支援批量選取並自動快取)</span>
+                </div>
+                <input type="file" id="local-file-input" multiple accept="image/*" class="block w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer" onchange="handleLocalFilesSelect(event)">
+            </div>
+
+            <div class="space-y-2 text-xs">
+                <div>
+                    <label class="block text-slate-400 mb-0.5">北方關閉大門背景 (bg_north.png)</label>
+                    <input type="text" id="url-north" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200" placeholder="bg_north.png">
+                </div>
+                <div>
+                    <label class="block text-slate-400 mb-0.5">北方開啟大門背景 (bg_north_open.png)</label>
+                    <input type="text" id="url-north-open" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200" placeholder="bg_north_open.png">
+                </div>
+                <div>
+                    <label class="block text-slate-400 mb-0.5">東方背景 (bg_east.png)</label>
+                    <input type="text" id="url-east" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200" placeholder="bg_east.png">
+                </div>
+                <div>
+                    <label class="block text-slate-400 mb-0.5">南方背景 (bg_south.png)</label>
+                    <input type="text" id="url-south" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200" placeholder="bg_south.png">
+                </div>
+                <div>
+                    <label class="block text-slate-400 mb-0.5">西方背景 (bg_west.png)</label>
+                    <input type="text" id="url-west" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200" placeholder="bg_west.png">
+                </div>
+            </div>
+
+            <div class="mt-5 flex items-center justify-between">
+                <button onclick="clearSavedCache()" class="px-3.5 py-2 bg-rose-950/60 hover:bg-rose-900 border border-rose-800 text-rose-300 text-xs font-medium rounded-lg transition">
+                    清除已存快取
+                </button>
+                <div class="flex gap-2">
+                    <button onclick="resetToSvgFallback()" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 rounded-lg transition">
+                        向量模擬備用圖
+                    </button>
+                    <button onclick="applyImageSources()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-medium text-white rounded-lg shadow-lg shadow-indigo-600/30 transition">
+                        套用並儲存
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="text-center text-xs text-slate-500 py-2">
+        密室逃脫遊戲系統 &copy; 2026 - 四向環景與永久快取圖檔
+    </footer>
+
+    <script>
+        // Global scope declarations ensuring all onclick handlers are accessible
+        window.toggleImageSourceModal = function() {
+            const modal = document.getElementById('image-modal');
+            if (modal) {
+                modal.classList.toggle('hidden');
+            }
+        };
+
+        const DIRECTIONS = [
+            { name: '北方', code: 'N', label: 'North', angle: 0 },
+            { name: '東方', code: 'E', label: 'East', angle: 90 },
+            { name: '南方', code: 'S', label: 'South', angle: 180 },
+            { name: '西方', code: 'W', label: 'West', angle: 270 }
+        ];
+
+        let currentDirectionIndex = 0;
+        let isDoorUnlocked = false; 
+        let currentLockInput = ""; 
+        const CORRECT_DOOR_CODE = "4765";
+
+        const puzzleStates = {
+            frame: { unlocked: false, code: "705", digits: 3, name: "南方畫框", lockedImg: "puzzle_frame_locked.png", rewardImg: "item_pencil_frame.png" },
+            safe: { unlocked: false, code: "3742", digits: 4, name: "西方保險箱", lockedImg: "puzzle_safe_locked.png", rewardImg: "item_safe_opened.png" },
+            backpack: { unlocked: false, code: "319", digits: 3, name: "東方黑色書包", lockedImg: "puzzle_backpack_locked.png", rewardImg: "item_backpack_opened.png" },
+            orangeBox: { unlocked: false, code: "6928", digits: 4, name: "東方橘色箱子", lockedImg: "puzzle_orange_box_locked.png", rewardImg: "item_orange_box_opened.png" }
+        };
+
+        let currentActivePuzzleKey = null;
+        let currentPuzzleInput = "";
+
+        const SVG_IMAGES = {
+            north: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="960" height="540"><rect width="960" height="540" fill="#f5f2eb"/><rect y="500" width="960" height="40" fill="#e2d8c3"/><g transform="translate(130, 100)"><rect width="310" height="290" fill="#ffffff" stroke="#996633" stroke-width="12" rx="4"/><line x1="155" y1="0" x2="155" y2="290" stroke="#996633" stroke-width="8"/></g><g transform="translate(610, 100)"><rect width="250" height="400" fill="#d97706" stroke="#b45309" stroke-width="8" rx="6"/><rect x="210" y="240" width="28" height="35" fill="#3b82f6" rx="4"/><circle cx="224" cy="257" r="5" fill="#facc15"/></g></svg>`,
+            northOpen: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="960" height="540"><rect width="960" height="540" fill="#1e293b"/><rect y="500" width="960" height="40" fill="#0f172a"/><g transform="translate(610, 100)"><rect width="250" height="400" fill="#0f172a" stroke="#059669" stroke-width="8" rx="6"/><text x="45" y="210" fill="#34d399" font-size="28" font-weight="900">ESCAPE SUCCESS!</text></g></svg>`,
+            doorLocked: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300"><rect width="400" height="300" fill="#334155"/><rect x="120" y="40" width="160" height="220" fill="#d97706" rx="8"/><rect x="235" y="110" width="22" height="40" fill="#1e293b" rx="4"/><circle cx="246" cy="130" r="12" fill="#eab308"/></svg>`,
+            east: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="960" height="540"><rect width="960" height="540" fill="#f5f2eb"/><rect y="500" width="960" height="40" fill="#e2d8c3"/><rect x="120" y="100" width="800" height="400" fill="#451a03"/></svg>`,
+            south: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="960" height="540"><rect width="960" height="540" fill="#f5f2eb"/><rect y="500" width="960" height="40" fill="#e2d8c3"/><circle cx="480" cy="200" r="80" fill="#ea580c"/></svg>`,
+            west: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="960" height="540"><rect width="960" height="540" fill="#f5f2eb"/><rect y="500" width="960" height="40" fill="#e2d8c3"/><rect x="110" y="50" width="740" height="350" fill="#14532d"/></svg>`,
+            window: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300"><rect width="400" height="300" fill="#93c5fd"/><text x="130" y="150" fill="#1e3a8a" font-size="20" font-weight="bold">Window Close-up</text></svg>`,
+            doodle: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300"><rect width="400" height="300" fill="#065f46"/><text x="130" y="150" fill="#a7f3d0" font-size="20" font-weight="bold">Doodle Close-up</text></svg>`,
+            calendar: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300"><rect width="400" height="300" fill="#e2e8f0"/><text x="130" y="150" fill="#334155" font-size="20" font-weight="bold">Calendar Close-up</text></svg>`,
+            book: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300"><rect width="400" height="300" fill="#1e293b"/><text x="140" y="150" fill="#e2e8f0" font-size="20" font-weight="bold">Book Close-up</text></svg>`,
+            backpackLocked: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300"><rect width="400" height="300" fill="#0f172a"/><text x="110" y="150" fill="#fde047" font-size="20" font-weight="bold">Backpack Lock (319)</text></svg>`,
+            backpackReward: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300"><rect width="400" height="300" fill="#065f46"/><text x="90" y="150" fill="#a7f3d0" font-size="18" font-weight="bold">item_backpack_opened.png</text></svg>`
+        };
+
+        const backgroundUrls = {
+            north: 'bg_north.png',
+            northOpen: 'bg_north_open.png',
+            doorLocked: 'puzzle_door_locked.png',
+            east: 'bg_east.png',
+            south: 'bg_south.png',
+            west: 'bg_west.png',
+            window: 'puzzle_window.png',
+            doodle: 'puzzle_doodle.png',
+            calendar: 'puzzle_calendar.png',
+            book: 'puzzle_book.png',
+            frame: 'puzzle_frame_locked.png',
+            frameReward: 'item_pencil_frame.png',
+            safe: 'puzzle_safe_locked.png',
+            safeReward: 'item_safe_opened.png',
+            backpack: 'puzzle_backpack_locked.png',
+            backpackReward: 'item_backpack_opened.png',
+            orangeBox: 'puzzle_orange_box_locked.png',
+            orangeBoxReward: 'item_orange_box_opened.png'
+        };
+
+        // 從 LocalStorage 載入已快取的 Base64 圖片資料
+        let blobStorage = {
+            north: null, northOpen: null, doorLocked: null,
+            east: null, south: null, west: null,
+            window: null, doodle: null, calendar: null, book: null,
+            frame: null, frameReward: null,
+            safe: null, safeReward: null,
+            backpack: null, backpackReward: null,
+            orangeBox: null, orangeBoxReward: null
+        };
+
+        function loadCachedImages() {
+            try {
+                const saved = localStorage.getItem('escaperoom_blob_cache');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    Object.keys(blobStorage).forEach(k => {
+                        if (parsed[k]) blobStorage[k] = parsed[k];
+                    });
+                }
+            } catch (e) {
+                console.warn('無法讀取本地快取', e);
+            }
+        }
+
+        function saveCachedImages() {
+            try {
+                localStorage.setItem('escaperoom_blob_cache', JSON.stringify(blobStorage));
+            } catch (e) {
+                console.warn('儲存到 localStorage 失敗（容量可能超限）', e);
+            }
+        }
+
+        window.clearSavedCache = function() {
+            localStorage.removeItem('escaperoom_blob_cache');
+            Object.keys(blobStorage).forEach(k => blobStorage[k] = null);
+            renderBackgrounds();
+            showToast('已清除本地圖檔快取');
+        };
+
+        function showToast(text) {
+            const toast = document.getElementById('toast-msg');
+            const toastText = document.getElementById('toast-text');
+            if (!toast || !toastText) return;
+
+            toastText.textContent = text;
+            toast.classList.remove('opacity-0', 'translate-y-[-10px]');
+            toast.classList.add('opacity-100', 'translate-y-0');
+
+            setTimeout(() => {
+                toast.classList.remove('opacity-100', 'translate-y-0');
+                toast.classList.add('opacity-0', 'translate-y-[-10px]');
+            }, 3000);
+        }
+
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let audioCtx = null;
+
+        function playSound(type) {
+            try {
+                if (!audioCtx) audioCtx = new AudioContext();
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                
+                if (type === 'turn') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(320, audioCtx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(140, audioCtx.currentTime + 0.08);
+                    gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.08);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.08);
+                } else if (type === 'success') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+                    osc.frequency.setValueAtTime(554.37, audioCtx.currentTime + 0.1);
+                    osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.2);
+                    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.4);
+                } else if (type === 'error') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(180, audioCtx.currentTime);
+                    osc.frequency.setValueAtTime(120, audioCtx.currentTime + 0.15);
+                    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.3);
+                }
+            } catch(e) {}
+        }
+
+        function updateSceneView() {
+            const strip = document.getElementById('panorama-strip');
+            const offsetPercentage = currentDirectionIndex * 25;
+            strip.style.transform = `translateX(-${offsetPercentage}%)`;
+
+            const dir = DIRECTIONS[currentDirectionIndex];
+            document.getElementById('compass-badge').textContent = `${dir.name} (${dir.label})`;
+            document.getElementById('radar-label').textContent = `${dir.name} (${dir.angle}°)`;
+            document.getElementById('compass-needle').style.transform = `rotate(${dir.angle}deg)`;
+
+            playSound('turn');
+        }
+
+        window.turnRight = function() {
+            currentDirectionIndex = (currentDirectionIndex + 1) % DIRECTIONS.length;
+            updateSceneView();
+        };
+
+        window.turnLeft = function() {
+            currentDirectionIndex = (currentDirectionIndex - 1 + DIRECTIONS.length) % DIRECTIONS.length;
+            updateSceneView();
+        };
+
+        window.turnAround = function() {
+            currentDirectionIndex = (currentDirectionIndex + 2) % DIRECTIONS.length;
+            updateSceneView();
+        };
+
+        function applyBgWithFallback(elementId, targetKey, fallbackSvg) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            const primaryUrl = blobStorage[targetKey] || backgroundUrls[targetKey];
+
+            const img = new Image();
+            img.src = primaryUrl;
+            img.onload = () => { el.style.backgroundImage = `url('${primaryUrl}')`; };
+            img.onerror = () => {
+                let altUrl = primaryUrl;
+                if (primaryUrl.endsWith('.png')) altUrl = primaryUrl.replace('.png', '.jpg');
+                else if (primaryUrl.endsWith('.jpg')) altUrl = primaryUrl.replace('.jpg', '.png');
+                
+                const altImg = new Image();
+                altImg.src = altUrl;
+                altImg.onload = () => { el.style.backgroundImage = `url('${altUrl}')`; };
+                altImg.onerror = () => {
+                    el.style.backgroundImage = `url('${fallbackSvg}')`;
+                };
+            };
+        }
+
+        function renderBackgrounds() {
+            const northKey = isDoorUnlocked ? 'northOpen' : 'north';
+            const northFallback = isDoorUnlocked ? SVG_IMAGES.northOpen : SVG_IMAGES.north;
+            applyBgWithFallback('scene-north', northKey, northFallback);
+
+            applyBgWithFallback('scene-east', 'east', SVG_IMAGES.east);
+            applyBgWithFallback('scene-south', 'south', SVG_IMAGES.south);
+            applyBgWithFallback('scene-west', 'west', SVG_IMAGES.west);
+
+            applyBgWithFallback('puzzle-door-container', 'doorLocked', SVG_IMAGES.doorLocked);
+        }
+
+        window.openInspectionModal = function(type) {
+            const modal = document.getElementById('inspection-modal');
+            const titleEl = document.getElementById('inspection-title');
+            if (!modal) return;
+
+            const titles = {
+                window: '北方窗戶特寫',
+                doodle: '西方牆上塗鴉特寫',
+                calendar: '南方日曆特寫',
+                book: '南方書本特寫'
+            };
+
+            titleEl.innerHTML = `<i class="fa-solid fa-magnifying-glass text-indigo-400"></i><span>${titles[type] || '物件特寫'}</span>`;
+            applyBgWithFallback('inspection-container', type, SVG_IMAGES[type] || SVG_IMAGES.window);
+            modal.classList.remove('hidden');
+        };
+
+        window.closeInspectionModal = function() {
+            document.getElementById('inspection-modal').classList.add('hidden');
+        };
+
+        window.openPuzzleModal = function(puzzleKey) {
+            const p = puzzleStates[puzzleKey];
+            if (!p) return;
+            currentActivePuzzleKey = puzzleKey;
+            currentPuzzleInput = "";
+
+            const modal = document.getElementById('puzzle-modal');
+            const titleEl = document.getElementById('puzzle-modal-title');
+            const errorMsg = document.getElementById('puzzle-error-msg');
+            if (!modal) return;
+
+            errorMsg.textContent = "";
+            titleEl.innerHTML = `<i class="fa-solid fa-puzzle-piece text-indigo-400"></i><span>${p.name}解謎 (${p.digits}位數)</span>`;
+            
+            const targetKey = p.unlocked ? puzzleKey + 'Reward' : puzzleKey;
+            const fallbackKey = p.unlocked ? 'backpackReward' : 'backpackLocked';
+            applyBgWithFallback('puzzle-image-container', targetKey, SVG_IMAGES[fallbackKey] || SVG_IMAGES.backpackLocked);
+
+            updatePuzzleDisplay();
+            modal.classList.remove('hidden');
+        };
+
+        window.closePuzzleModal = function() {
+            document.getElementById('puzzle-modal').classList.add('hidden');
+            currentActivePuzzleKey = null;
+        };
+
+        window.pressPuzzleKey = function(digit) {
+            if (!currentActivePuzzleKey) return;
+            const p = puzzleStates[currentActivePuzzleKey];
+            if (currentPuzzleInput.length < p.digits) {
+                currentPuzzleInput += digit;
+                updatePuzzleDisplay();
+            }
+        };
+
+        window.clearPuzzleInput = function() {
+            currentPuzzleInput = "";
+            updatePuzzleDisplay();
+            document.getElementById('puzzle-error-msg').textContent = "";
+        };
+
+        function updatePuzzleDisplay() {
+            if (!currentActivePuzzleKey) return;
+            const p = puzzleStates[currentActivePuzzleKey];
+            const display = document.getElementById('puzzle-combination-display');
+            let padded = currentPuzzleInput.padEnd(p.digits, '-');
+            display.textContent = padded;
+        }
+
+        window.submitPuzzleCode = function() {
+            if (!currentActivePuzzleKey) return;
+            const p = puzzleStates[currentActivePuzzleKey];
+            const errorMsg = document.getElementById('puzzle-error-msg');
+
+            if (p.unlocked) {
+                showToast(`✅ ${p.name} 已經解開囉！`);
+                closePuzzleModal();
+                return;
+            }
+
+            if (currentPuzzleInput === p.code) {
+                playSound('success');
+                p.unlocked = true;
+                showToast(`🎉 成功解開 ${p.name}！`);
+                
+                const targetKey = currentActivePuzzleKey + 'Reward';
+                applyBgWithFallback('puzzle-image-container', targetKey, SVG_IMAGES.backpackReward);
+                
+                setTimeout(() => {
+                    closePuzzleModal();
+                }, 1200);
+            } else {
+                playSound('error');
+                errorMsg.textContent = "ERROR: 密碼錯誤，請重新輸入！";
+                setTimeout(() => {
+                    currentPuzzleInput = "";
+                    updatePuzzleDisplay();
+                }, 800);
+            }
+        };
+
+        window.openDoorLockModal = function() {
+            if (isDoorUnlocked) {
+                showToast('✅ 大門已經開啟囉！');
+                return;
+            }
+            document.getElementById('door-lock-modal').classList.remove('hidden');
+            currentLockInput = "";
+            updateLockDisplay();
+        };
+
+        window.closeDoorLockModal = function() {
+            document.getElementById('door-lock-modal').classList.add('hidden');
+        };
+
+        window.pressLockKey = function(digit) {
+            if (currentLockInput.length < 4) {
+                currentLockInput += digit;
+                updateLockDisplay();
+            }
+        };
+
+        window.clearLockInput = function() {
+            currentLockInput = "";
+            updateLockDisplay();
+            document.getElementById('lock-error-msg').textContent = "";
+        };
+
+        function updateLockDisplay() {
+            const display = document.getElementById('combination-display');
+            let padded = currentLockInput.padEnd(4, '-');
+            display.textContent = padded;
+        }
+
+        window.submitLockCode = function() {
+            const errorMsg = document.getElementById('lock-error-msg');
+            if (currentLockInput === CORRECT_DOOR_CODE) {
+                playSound('success');
+                isDoorUnlocked = true;
+                closeDoorLockModal();
+                renderBackgrounds();
+                showToast('🎉 密碼正確！大門已開啟！');
+                
+                setTimeout(() => {
+                    document.getElementById('victory-modal').classList.remove('hidden');
+                }, 500);
+            } else {
+                playSound('error');
+                errorMsg.textContent = "ERROR: 密碼錯誤，請重新輸入！";
+                setTimeout(() => {
+                    currentLockInput = "";
+                    updateLockDisplay();
+                }, 800);
+            }
+        };
+
+        window.closeVictoryModal = function() {
+            document.getElementById('victory-modal').classList.add('hidden');
+        };
+
+        window.resetGameRoom = function() {
+            isDoorUnlocked = false;
+            currentLockInput = "";
+            Object.keys(puzzleStates).forEach(k => puzzleStates[k].unlocked = false);
+            closeVictoryModal();
+            closeDoorLockModal();
+            renderBackgrounds();
+            currentDirectionIndex = 0;
+            updateSceneView();
+            showToast('已重設遊戲房間');
+        };
+
+        // 將上傳的檔案轉換為 Base64 字串並儲存至 localStorage 快取
+        function processFiles(files) {
+            if (!files || files.length === 0) return;
+            let loaded = 0;
+            Array.from(files).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const base64Data = e.target.result;
+                    const name = file.name.toLowerCase();
+
+                    if (name.includes('north_open')) { blobStorage.northOpen = base64Data; loaded++; }
+                    else if (name.includes('north')) { blobStorage.north = base64Data; loaded++; }
+                    else if (name.includes('door_locked')) { blobStorage.doorLocked = base64Data; loaded++; }
+                    else if (name.includes('item_backpack_opened')) { blobStorage.backpackReward = base64Data; loaded++; }
+                    else if (name.includes('backpack_locked')) { blobStorage.backpack = base64Data; loaded++; }
+                    else if (name.includes('east')) { blobStorage.east = base64Data; loaded++; }
+                    else if (name.includes('south')) { blobStorage.south = base64Data; loaded++; }
+                    else if (name.includes('west')) { blobStorage.west = base64Data; loaded++; }
+                    else if (name.includes('window')) { blobStorage.window = base64Data; loaded++; }
+                    else if (name.includes('doodle')) { blobStorage.doodle = base64Data; loaded++; }
+                    else if (name.includes('calendar')) { blobStorage.calendar = base64Data; loaded++; }
+                    else if (name.includes('book')) { blobStorage.book = base64Data; loaded++; }
+                    else if (name.includes('frame_locked')) { blobStorage.frame = base64Data; loaded++; }
+                    else if (name.includes('pencil_frame') || name.includes('item_pencil_frame')) { blobStorage.frameReward = base64Data; loaded++; }
+                    else if (name.includes('safe_locked')) { blobStorage.safe = base64Data; loaded++; }
+                    else if (name.includes('safe_opened') || name.includes('item_safe_opened')) { blobStorage.safeReward = base64Data; loaded++; }
+                    else if (name.includes('orange_box_locked')) { blobStorage.orangeBox = base64Data; loaded++; }
+                    else if (name.includes('orange_box_opened') || name.includes('item_orange_box_opened')) { blobStorage.orangeBoxReward = base64Data; loaded++; }
+
+                    saveCachedImages();
+                    renderBackgrounds();
+                    showToast(`🎉 成功快取 ${loaded} 個檔案！`);
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        window.handleLocalFilesSelect = function(e) { processFiles(e.target.files); };
+
+        function makeCardDraggable() {
+            const card = document.getElementById('draggable-lock-card');
+            if (card) {
+                const header = card.querySelector('.cursor-move');
+                let isDragging = false, startX, startY, posX = 0, posY = 0;
+                header.addEventListener('mousedown', (e) => {
+                    isDragging = true;
+                    startX = e.clientX - posX;
+                    startY = e.clientY - posY;
+                });
+                window.addEventListener('mousemove', (e) => {
+                    if (!isDragging) return;
+                    posX = e.clientX - startX;
+                    posY = e.clientY - startY;
+                    card.style.transform = `translate(${posX}px, ${posY}px)`;
+                });
+                window.addEventListener('mouseup', () => { isDragging = false; });
+            }
+
+            const pCard = document.getElementById('draggable-puzzle-card');
+            if (pCard) {
+                const pHeader = pCard.querySelector('.cursor-move');
+                let pIsDragging = false, pStartX, pStartY, pPosX = 0, pPosY = 0;
+                pHeader.addEventListener('mousedown', (e) => {
+                    pIsDragging = true;
+                    pStartX = e.clientX - pPosX;
+                    pStartY = e.clientY - pPosY;
+                });
+                window.addEventListener('mousemove', (e) => {
+                    if (!pIsDragging) return;
+                    pPosX = e.clientX - pStartX;
+                    pPosY = e.clientY - pPosY;
+                    pCard.style.transform = `translate(${pPosX}px, ${pPosY}px)`;
+                });
+                window.addEventListener('mouseup', () => { pIsDragging = false; });
+            }
+        }
+
+        function setupDragAndDrop() {
+            const vp = document.getElementById('game-viewport-container');
+            const overlay = document.getElementById('drop-overlay');
+            if (!vp || !overlay) return;
+            ['dragenter', 'dragover'].forEach(ev => vp.addEventListener(ev, (e) => { e.preventDefault(); overlay.classList.remove('opacity-0', 'pointer-events-none'); overlay.classList.add('opacity-100'); }));
+            ['dragleave', 'drop'].forEach(ev => vp.addEventListener(ev, (e) => { e.preventDefault(); overlay.classList.remove('opacity-100'); overlay.classList.add('opacity-0', 'pointer-events-none'); }));
+            vp.addEventListener('drop', (e) => processFiles(e.dataTransfer.files));
+        }
+
+        window.applyImageSources = function() {
+            const getVal = (id) => document.getElementById(id).value.trim();
+            if (getVal('url-north')) backgroundUrls.north = getVal('url-north');
+            if (getVal('url-north-open')) backgroundUrls.northOpen = getVal('url-north-open');
+            if (getVal('url-east')) backgroundUrls.east = getVal('url-east');
+            if (getVal('url-south')) backgroundUrls.south = getVal('url-south');
+            if (getVal('url-west')) backgroundUrls.west = getVal('url-west');
+
+            renderBackgrounds();
+            toggleImageSourceModal();
+            showToast('✅ 圖片來源設定已儲存！');
+        };
+
+        window.resetToSvgFallback = function() {
+            Object.keys(blobStorage).forEach(k => blobStorage[k] = null);
+            localStorage.removeItem('escaperoom_blob_cache');
+            renderBackgrounds();
+            toggleImageSourceModal();
+            showToast('已切換為備用向量繪圖');
+        };
+
+        window.onload = function() {
+            loadCachedImages();
+            setupDragAndDrop();
+            makeCardDraggable();
+            renderBackgrounds();
+            updateSceneView();
+        };
+    </script>
+</body>
+</html>
